@@ -683,7 +683,7 @@ async function buildNetwork() {
 
     const resolved = [];
     for (const item of resp) {
-      if (item.error) { setStatus(`Not found: ${item.query}`); continue; }
+      if (item.error) { setStatus(`Error resolving "${item.query}": ${item.error}`); continue; }
       if (item.candidates.length > 1) {
         const chosen = await disambiguate(item.query, item.candidates);
         if (chosen) resolved.push(chosen);

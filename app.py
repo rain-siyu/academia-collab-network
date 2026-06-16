@@ -305,7 +305,9 @@ def api_resolve():
                 top, candidates = resolve_author(name)
                 results.append({"query": name, "author": top, "candidates": candidates})
             except Exception as e:
-                results.append({"query": name, "error": str(e)})
+                import traceback
+                traceback.print_exc()
+                results.append({"query": name, "error": f"{type(e).__name__}: {e}"})
         return jsonify(results)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
