@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip show *)",
+      "Bash(pip install *)",
+      "Bash(curl -s http://localhost:5000)",
+      "Bash(cat /tmp/coauthor_app.log)",
+      "Bash(curl -v http://localhost:5000)",
+      "Bash(kill 67521)",
+      "Bash(pkill -f \"python app.py\")",
+      "Bash(python app.py)",
+      "Bash(curl -s http://localhost:5001)",
+      "Bash(curl -s http://localhost:5001/api/coauthors/A5023888391)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('nodes:', len\\(d['nodes']\\), '| first edge count:', d['edges'][0]['count'] if d['edges'] else 'n/a'\\)\")",
+      "Bash(curl -s \"http://localhost:5001/api/collaboration/A5023888391/A5047832651?na=Huamin+Qu&nb=Yong+Wang\")",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(list\\(d.keys\\(\\)\\)[:5], d.get\\('error','ok'\\)\\)\")",
+      "Bash(curl -s \"http://localhost:5001/api/coauthors/A5023888391?limit=5\")",
+      "Bash(curl -s \"http://localhost:5001/api/resolve\" -X POST -H \"Content-Type: application/json\" -d '{\"names\":[\"Huamin Qu\"]}')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d[0]['author']\\)\")",
+      "Bash(curl -s \"http://localhost:5001/api/coauthors/A5091466289?limit=5\")",
+      "Bash(curl -s \"http://localhost:5001/api/collaboration/A5091466289/A5100424394?na=Huamin+Qu&nb=Yong+Wang\")",
+      "Bash(curl -s \"https://api.openalex.org/institutions/I209863525?mailto=you@example.com\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('geo'\\)\\)\")",
+      "Bash(curl -s \"https://api.openalex.org/authors/A5091466289?mailto=you@example.com\")",
+      "Bash(curl -s \"https://api.openalex.org/institutions/I200769079?mailto=you@example.com\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('geo'\\)\\); print\\(d.get\\('country_code'\\)\\)\")",
+      "Bash(awk '{print $2\"-\"$4}')",
+      "Bash(git add *)"
+    ]
+  }
+}
