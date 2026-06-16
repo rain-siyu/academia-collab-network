@@ -10,7 +10,6 @@ import time
 from collections import defaultdict
 import requests
 from flask import Flask, jsonify, request, send_from_directory
-from flask_cors import CORS
 
 import os
 MAILTO = os.environ.get("MAILTO", "you@example.com")
@@ -21,7 +20,6 @@ SESSION = requests.Session()
 SESSION.headers.update({"User-Agent": f"coauthor-explorer (mailto:{MAILTO})"})
 
 app = Flask(__name__, static_folder="static")
-CORS(app)
 
 # Cache: author_id -> {coauthor_id: {name, count, works: [...]}}
 _neighbor_cache = {}
