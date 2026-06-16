@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Academia Collaboration Network</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+       background: #0f1117; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+
+/* ── Header ── */
+#header { padding: 12px 18px; background: #1a1d27; border-bottom: 1px solid #2d3148;
+          display: flex; align-items: center; gap: 12px; }
+#header h1 { font-size: 15px; font-weight: 600; color: #a0b4ff; white-space: nowrap; }
+#input-area { display: flex; gap: 8px; flex: 1; }
+#names-input { flex: 1; background: #252836; border: 1px solid #3a3f5c; border-radius: 6px;
+               padding: 7px 12px; color: #e0e0e0; font-size: 13px; outline: none; }
+#names-input:focus { border-color: #6070d0; }
+#names-input::placeholder { color: #5a607a; }
+button { background: #4a5adc; border: none; border-radius: 6px; color: #fff;
+         padding: 7px 16px; font-size: 13px; cursor: pointer; white-space: nowrap; transition: background .15s; }
+button:hover { background: #5a6aec; }
+button:disabled { background: #2a2d3a; color: #555; cursor: default; }
+#btn-clear { background: #2d3148; }
+#btn-clear:hover { background: #3a3f5c; }
+
+/* ── Layout ── */
+#main { flex: 1; display: flex; overflow: hidden; }
+#canvas-wrap { flex: 1; position: relative; }
+#canvas-wrap svg { width: 100%; height: 100%; }
+
+/* ── Tooltip ── */
+#tooltip { position: absolute; background: #1e2135; border: 1px solid #3a3f5c;
+           border-radius: 8px; padding: 10px 14px; font-size: 12px; pointer-events: none;
+           opacity: 0; transition: opacity .15s; max-width: 240px; z-index: 10; }
+#tooltip .tt-name { font-weight: 600; font-size: 13px; color: #c0ccff; margin-bottom: 3px; }
+#tooltip .tt-sub  { color: #6080a0; font-size: 11px; }
+
+/* ── Side panel ── */
+#side-panel { width: 320px; background: #1a1d27; border-left: 1px solid #2d3148;
+              display: flex; flex-direction: column; overflow: hidden; transition: width .2s; }
+#side-panel.hidden { width: 0; border: none; }
+#panel-header { padding: 14px 16px 10px; border-bottom: 1px solid #2d3148; flex-shrink: 0; }
+#panel-title  { font-size: 14px; font-weight: 600; color: #c0ccff; padding-right: 24px; line-height: 1.4; }
+#panel-meta   { font-size: 11px; color: #5070a0; margin-top: 3px; }
+#panel-close  { position: absolute; right: 14px; top: 14px; background: none; border: none;
+                color: #5060a0; font-size: 17px; cursor: pointer; padding: 0; line-height: 1; }
+#panel-close:hover { color: #a0b0d0; background: none; }
+#panel-body   { flex: 1; overflow-y: auto; padding: 12px 16px; }
+
+/* Panel sections */
+.section { margin-bottom: 18px; }
+.section-label { font-size: 10px; font-weight: 600; color: #4a5878; text-transform: uppercase;
+                 letter-spacing: .06em; margin-bottom: 8px; }
+
+/* Role chips */
+.role-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+.chip { background: #252836; border: 1px solid #2d3148; border-radius: 10px;
+        padding: 3px 9px; font-size: 11px; color: #8090c0; }
+.chip.highlight { background: #2a2f52; border-color: #404880; color: #a0b0f0; }
+.author-name-chip { font-size: 11px; color: #7080b0; font-style: italic; margin-bottom: 4px; }
+
+/* Topic tags */
+.topic-tag { display: inline-block; background: #1e2640; border: 1px solid #2d3a5c;
+             border-radius: 4px; padding: 2px 8px; font-size: 11px; color: #7090c0;
+             margin: 2px 3px 2px 0; }
+
+/* Paper list */
+.paper-item { padding: 7px 0; border-bottom: 1px solid #1e2135; }
+.paper-item:last-child { border: none; }
+.paper-title { font-size: 12px; color: #b0c0e0; line-height: 1.4; }
+.paper-year  { font-size: 10px; color: #4a5878; margin-top: 2px; }
+
+/* Coauthor list items */
+.coauthor-item { padding: 7px 0; cursor: pointer; border-bottom: 1px solid #1e2135;
+                 display: flex; align-items: center; gap: 8px; }
+.coauthor-item:hover .ci-name { color: #fff; }
+.ci-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.ci-name { font-size: 13px; color: #c0d0f0; flex: 1; }
+.ci-count { font-size: 11px; color: #4a5878; background: #1e2135; border-radius: 8px;
+            padding: 1px 7px; white-space: nowrap; }
+
+/* Bar chart */
+#trend-chart { margin-top: 6px; }
+.bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.bar-year  { font-size: 10px; color: #5060a0; width: 34px; flex-shrink: 0; text-align: right; }
+.bar-track { flex: 1; height: 12px; background: #1e2135; border-radius: 3px; overflow: hidden; }
+.bar-fill  { height: 100%; background: #4a60c0; border-radius: 3px; transition: width .4s; }
+.bar-num   { font-size: 10px; color: #5060a0; width: 20px; flex-shrink: 0; }
+
+/* Big stat */
+.stat-number { font-size: 28px; font-weight: 700; color: #6070d0; }
+.stat-label  { font-size: 11px; color: #4a5878; margin-top: 2px; }
+
+/* Loading */
+.loading-msg { text-align: center; color: #4a5070; padding: 30px 0; font-size: 13px; }
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #2d3148;
+           border-top-color: #5060c0; border-radius: 50%; animation: spin .7s linear infinite;
+           vertical-align: middle; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Status */
+#status { padding: 5px 16px; font-size: 11px; color: #4a5070;
+          background: #13151e; border-top: 1px solid #1e2135; }
+
+/* Legend */
+#legend { position: absolute; bottom: 28px; left: 14px; background: #1a1d27bb;
+          border: 1px solid #2d3148; border-radius: 8px; padding: 9px 13px; font-size: 11px; color: #5070a0; }
+#legend div { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+#legend div:last-child { margin-bottom: 0; }
+.leg-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.leg-line { width: 18px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+
+/* Disambiguation modal */
+#modal-overlay { position: fixed; inset: 0; background: #00000088; z-index: 100;
+                 display: none; align-items: center; justify-content: center; }
+#modal-overlay.show { display: flex; }
+#modal { background: #1e2135; border: 1px solid #3a3f5c; border-radius: 12px;
+         padding: 22px; min-width: 400px; max-width: 540px; }
+#modal h2 { font-size: 14px; color: #c0ccff; margin-bottom: 4px; }
+#modal p  { font-size: 12px; color: #5070a0; margin-bottom: 14px; }
+.cand-item { padding: 9px 13px; border: 1px solid #2d3148; border-radius: 7px;
+             margin-bottom: 7px; cursor: pointer; transition: border-color .15s; }
+.cand-item:hover { border-color: #5060c0; background: #252836; }
+.cand-item .ci-name   { font-size: 13px; color: #c0d0f0; font-weight: 500; }
+.cand-item .ci-detail { font-size: 11px; color: #5070a0; margin-top: 2px; }
+
+/* Edge hit area */
+.edge-hit { stroke: transparent; stroke-width: 12; fill: none; cursor: pointer; }
+.edge-hit:hover + .edge-vis { stroke: #8090e0 !important; }
+
+/* Author profile card */
+.profile-card { background: #191c2a; border: 1px solid #252d48; border-radius: 8px;
+                padding: 10px 12px; margin-bottom: 8px; }
+.profile-card + .profile-card { margin-top: 0; }
+.profile-name { font-size: 13px; font-weight: 600; color: #b0c0f0; margin-bottom: 6px; }
+.profile-row  { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 3px; font-size: 11px; }
+.profile-icon { width: 14px; flex-shrink: 0; text-align: center; opacity: .6; }
+.profile-val  { color: #8090b0; line-height: 1.4; }
+.profile-stat-row { display: flex; gap: 14px; margin-top: 7px; padding-top: 7px;
+                    border-top: 1px solid #252d48; }
+.profile-stat { text-align: center; }
+.profile-stat .n { font-size: 15px; font-weight: 700; color: #7080d0; }
+.profile-stat .l { font-size: 9px; color: #4a5878; margin-top: 1px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>🔬 Collaboration Network</h1>
+  <div id="input-area">
+    <input id="names-input" type="text"
+      placeholder='Enter scholar names separated by commas, e.g. Yoshua Bengio, Geoffrey Hinton' />
+    <button id="btn-build">Build Network</button>
+    <button id="btn-clear">Clear</button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="canvas-wrap">
+    <svg id="graph"></svg>
+    <div id="tooltip">
+      <div class="tt-name" id="tt-name"></div>
+      <div class="tt-sub"  id="tt-sub"></div>
+    </div>
+    <div id="legend">
+      <div><span class="leg-dot" style="background:#6070d0"></span>Seed scholar</div>
+      <div><span class="leg-dot" style="background:#48b090"></span>Expanded</div>
+      <div><span class="leg-dot" style="background:#708090"></span>Collaborator</div>
+      <div><span class="leg-line" style="background:#6070d0;height:4px"></span>More collaborations</div>
+      <div><span class="leg-line" style="background:#3a4060;height:1px"></span>Fewer collaborations</div>
+    </div>
+  </div>
+
+  <div id="side-panel" class="hidden">
+    <div id="panel-header" style="position:relative">
+      <button id="panel-close">✕</button>
+      <div id="panel-title"></div>
+      <div id="panel-meta"></div>
+    </div>
+    <div id="panel-body"></div>
+  </div>
+</div>
+
+<div id="status">Ready · Enter scholar names and click Build Network</div>
+
+<div id="modal-overlay">
+  <div id="modal">
+    <h2 id="modal-title">Select the correct scholar</h2>
+    <p  id="modal-desc"></p>
+    <div id="modal-cands"></div>
+  </div>
+</div>
+
+<script>
+const API_BASE = "";
+
+// ─── State ────────────────────────────────────────────────────────
+const state = {
+  nodes: [],
+  edges: [],
+  expandedIds: new Set(),
+  selectedNode: null,
+  selectedEdge: null,
+};
+
+// Map for quick node lookup
+const nodeMap = () => new Map(state.nodes.map(n => [n.id, n]));
+
+// ─── D3 Setup ─────────────────────────────────────────────────────
+const svg = d3.select("#graph");
+const g   = svg.append("g");
+
+svg.call(d3.zoom().scaleExtent([0.15, 5])
+  .on("zoom", e => g.attr("transform", e.transform)));
+
+// Three layer groups (order matters for z-index)
+const gEdgeHit = g.append("g").attr("class", "edge-hits");   // invisible wide hit area
+const gEdge    = g.append("g").attr("class", "edge-vis");    // visible edge lines
+const gNode    = g.append("g").attr("class", "nodes");
+
+const simulation = d3.forceSimulation()
+  .force("charge",    d3.forceManyBody().strength(-350))
+  .force("center",    d3.forceCenter())
+  .force("collision", d3.forceCollide(d => nodeRadius(d) + 6))
+  .force("link",      d3.forceLink().id(d => d.id)
+                        .distance(d => edgeDistance(d))
+                        .strength(d => edgeStrength(d)))
+  .on("tick", ticked);
+
+// ─── Scales ───────────────────────────────────────────────────────
+const countScale = d3.scaleSqrt().range([1, 8]);   // edge width
+function edgeWidth(d)    { return Math.max(0.8, countScale(d.count || 1)); }
+function edgeDistance(d) { return Math.max(60, 220 - countScale(d.count || 1) * 18); }
+function edgeStrength(d) { return Math.min(0.9, 0.1 + (d.count || 1) / 40); }
+function nodeRadius(d)   { return d.group === "seed" ? 18 : d.group === "expanded" ? 13 : 8; }
+function nodeColor(d) {
+  if (d.id === state.selectedNode?.id) return "#e05060";
+  if (d.group === "seed")              return "#6070d0";
+  if (d.group === "expanded")         return "#48b090";
+  return "#708090";
+}
+function edgeColor(e) {
+  const sid = typeof e.source === "object" ? e.source.id : e.source;
+  const tid = typeof e.target === "object" ? e.target.id : e.target;
+  const sel = state.selectedEdge;
+  if (sel && ((sel.source === sid && sel.target === tid) || (sel.source === tid && sel.target === sid)))
+    return "#8090e0";
+  return d3.interpolateRgb("#1e2238", "#5060c0")(Math.min(1, (e.count || 1) / 20));
+}
+
+// ─── Render ───────────────────────────────────────────────────────
+let edgeHitSel = gEdgeHit.selectAll("line");
+let edgeVisSel = gEdge.selectAll("line");
+let nodeSel    = gNode.selectAll("g.node");
+
+function updateGraph() {
+  const W = document.getElementById("canvas-wrap").clientWidth;
+  const H = document.getElementById("canvas-wrap").clientHeight;
+  simulation.force("center").x(W / 2).y(H / 2);
+
+  // Dedup edges
+  const edgeMap = new Map();
+  state.edges.forEach(e => {
+    const s = typeof e.source === "object" ? e.source.id : e.source;
+    const t = typeof e.target === "object" ? e.target.id : e.target;
+    const k = [s, t].sort().join("||");
+    if (!edgeMap.has(k)) edgeMap.set(k, { source: s, target: t, count: e.count || 1 });
+    else edgeMap.get(k).count = Math.max(edgeMap.get(k).count, e.count || 1);
+  });
+  const edges = Array.from(edgeMap.values());
+
+  // Update count scale domain
+  const maxCount = d3.max(edges, d => d.count) || 1;
+  countScale.domain([1, maxCount]);
+
+  // ── Invisible hit area (wide, transparent) ──
+  edgeHitSel = edgeHitSel.data(edges, d => `${d.source}||${d.target}`)
+    .join("line")
+    .attr("stroke", "transparent")
+    .attr("stroke-width", 14)
+    .style("cursor", "pointer")
+    .on("click",     onEdgeClick)
+    .on("mouseover", onEdgeOver)
+    .on("mouseout",  onEdgeOut);
+
+  // ── Visible edge lines ──
+  edgeVisSel = edgeVisSel.data(edges, d => `${d.source}||${d.target}`)
+    .join("line")
+    .attr("stroke-width", edgeWidth)
+    .attr("stroke",       edgeColor)
+    .attr("stroke-opacity", 0.85)
+    .style("pointer-events", "none");
+
+  // ── Nodes ──
+  nodeSel = nodeSel.data(state.nodes, d => d.id)
+    .join(enter => {
+      const grp = enter.append("g").attr("class", "node").style("cursor", "pointer");
+      grp.append("circle");
+      grp.append("text").attr("text-anchor", "middle")
+        .style("pointer-events", "none").style("user-select", "none");
+      grp.call(d3.drag()
+        .on("start", (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on("drag",  (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on("end",   (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
+      grp.on("click",     onNodeClick);
+      grp.on("mouseover", onNodeOver);
+      grp.on("mouseout",  onNodeOut);
+      return grp;
+    });
+
+  nodeSel.select("circle")
+    .attr("r",            nodeRadius)
+    .attr("fill",         nodeColor)
+    .attr("stroke",       d => d.id === state.selectedNode?.id ? "#ff8090" : "#ffffff18")
+    .attr("stroke-width", d => d.id === state.selectedNode?.id ? 2.5 : 1);
+
+  nodeSel.select("text")
+    .text(d => {
+      if (d.group === "seed" || d.group === "expanded") {
+        const p = d.name.split(" ");
+        return p[p.length - 1];   // last name
+      }
+      return "";
+    })
+    .attr("dy",          d => nodeRadius(d) + 11)
+    .style("font-size",  d => d.group === "seed" ? "11px" : "9px")
+    .style("fill",       "#c0d0f0")
+    .style("font-weight", d => d.group === "seed" ? "600" : "400");
+
+  simulation.nodes(state.nodes);
+  simulation.force("link").links(edges);
+  simulation.alpha(0.4).restart();
+}
+
+function ticked() {
+  const posLine = sel => sel
+    .attr("x1", d => (typeof d.source === "object" ? d.source : {x:0}).x || 0)
+    .attr("y1", d => (typeof d.source === "object" ? d.source : {y:0}).y || 0)
+    .attr("x2", d => (typeof d.target === "object" ? d.target : {x:0}).x || 0)
+    .attr("y2", d => (typeof d.target === "object" ? d.target : {y:0}).y || 0);
+  posLine(edgeHitSel);
+  posLine(edgeVisSel);
+  nodeSel.attr("transform", d => `translate(${d.x ?? 0},${d.y ?? 0})`);
+}
+
+// ─── Node interactions ────────────────────────────────────────────
+async function onNodeClick(event, d) {
+  event.stopPropagation();
+  state.selectedEdge = null;
+
+  if (state.selectedNode?.id === d.id && state.expandedIds.has(d.id)) {
+    // Second click on expanded node → collapse
+    collapseNode(d.id);
+    state.selectedNode = null;
+    closeSidePanel();
+    updateGraph();
+    return;
+  }
+
+  state.selectedNode = d;
+  updateGraph();
+  await expandNode(d);
+  showNodePanel(d);
+}
+
+async function expandNode(d) {
+  if (state.expandedIds.has(d.id)) return;
+  setStatus(`Fetching collaborators for ${d.name}...`);
+  try {
+    const data = await apiFetch(`/api/coauthors/${d.id}?limit=30`);
+    if (data.error) { setStatus("Error: " + data.error); return; }
+
+    const nm = nodeMap();
+    data.nodes.forEach(n => {
+      if (!nm.has(n.id)) state.nodes.push({ ...n, group: "coauthor" });
+    });
+    data.edges.forEach(e => state.edges.push(e));
+    state.expandedIds.add(d.id);
+    const nd = state.nodes.find(n => n.id === d.id);
+    if (nd && nd.group !== "seed") nd.group = "expanded";
+    updateGraph();
+    setStatus(`${d.name}: expanded ${data.nodes.length} collaborators`);
+  } catch (e) { setStatus("Error: " + e.message); }
+}
+
+function collapseNode(nodeId) {
+  const seeds    = new Set(state.nodes.filter(n => n.group === "seed").map(n => n.id));
+  const expanded = new Set(state.expandedIds);
+  expanded.delete(nodeId);
+
+  // Remove edges anchored only to this node's expansion
+  state.edges = state.edges.filter(e => {
+    const s = typeof e.source === "object" ? e.source.id : e.source;
+    const t = typeof e.target === "object" ? e.target.id : e.target;
+    if (s !== nodeId && t !== nodeId) return true;
+    const other = s === nodeId ? t : s;
+    return seeds.has(other) || expanded.has(other);
+  });
+
+  // Remove orphan coauthor nodes
+  const connected = new Set();
+  state.edges.forEach(e => {
+    connected.add(typeof e.source === "object" ? e.source.id : e.source);
+    connected.add(typeof e.target === "object" ? e.target.id : e.target);
+  });
+  state.nodes = state.nodes.filter(n => n.group === "seed" || connected.has(n.id));
+  state.expandedIds.delete(nodeId);
+
+  const nd = state.nodes.find(n => n.id === nodeId);
+  if (nd && nd.group !== "seed") nd.group = "coauthor";
+}
+
+// ─── Edge interactions ────────────────────────────────────────────
+async function onEdgeClick(event, d) {
+  event.stopPropagation();
+  const sid = typeof d.source === "object" ? d.source.id : d.source;
+  const tid = typeof d.target === "object" ? d.target.id : d.target;
+  state.selectedEdge = { source: sid, target: tid };
+  state.selectedNode = null;
+  updateGraph();
+  showEdgePanel(sid, tid, d.count);
+}
+
+function onEdgeOver(event, d) {
+  const c = d.count || 1;
+  showTooltip(event, `${c} co-authored paper${c > 1 ? "s" : ""}`, "Click to view collaboration details");
+  // Highlight this edge
+  const sid = typeof d.source === "object" ? d.source.id : d.source;
+  const tid = typeof d.target === "object" ? d.target.id : d.target;
+  edgeVisSel.filter(e => {
+    const es = typeof e.source === "object" ? e.source.id : e.source;
+    const et = typeof e.target === "object" ? e.target.id : e.target;
+    return (es === sid && et === tid) || (es === tid && et === sid);
+  }).attr("stroke", "#8090e0").attr("stroke-opacity", 1);
+}
+function onEdgeOut(event, d) {
+  hideTooltip();
+  edgeVisSel.attr("stroke", edgeColor).attr("stroke-opacity", 0.85);
+}
+
+// ─── Side Panel ───────────────────────────────────────────────────
+function openSidePanel(title, meta) {
+  const p = document.getElementById("side-panel");
+  p.classList.remove("hidden");
+  document.getElementById("panel-title").textContent = title;
+  document.getElementById("panel-meta").textContent  = meta || "";
+  document.getElementById("panel-body").innerHTML =
+    '<div class="loading-msg"><span class="spinner"></span>Loading...</div>';
+}
+function closeSidePanel() {
+  document.getElementById("side-panel").classList.add("hidden");
+  document.getElementById("panel-body").innerHTML = "";
+}
+document.getElementById("panel-close").addEventListener("click", () => {
+  closeSidePanel();
+  state.selectedNode = null;
+  state.selectedEdge = null;
+  updateGraph();
+});
+
+// ── Node panel (coauthor list) ──
+function showNodePanel(d) {
+  openSidePanel(d.name, d.institution || "");
+  apiFetch(`/api/coauthors/${d.id}?limit=50`).then(data => {
+    if (data.error) { setPanelBody(`<div style="color:#e05060;padding:20px">${data.error}</div>`); return; }
+    const nm = nodeMap();
+    const rows = data.nodes.map(n => {
+      const inGraph = nm.has(n.id);
+      return `<div class="coauthor-item" data-id="${n.id}" data-name="${escHtml(n.name)}">
+        <span class="ci-dot" style="background:${inGraph ? '#48b090' : '#3a4060'}"></span>
+        <span class="ci-name">${escHtml(n.name)}</span>
+        <span class="ci-count">${n.count} paper${n.count > 1 ? "s" : ""}</span>
+      </div>`;
+    }).join("");
+    setPanelBody(`<div class="section">
+      <div class="section-label">Collaborators (sorted by joint paper count)</div>
+      ${rows}
+    </div>`);
+    document.querySelectorAll(".coauthor-item").forEach(el => {
+      el.addEventListener("click", () => {
+        const nid  = el.dataset.id;
+        const name = el.dataset.name;
+        let nd = state.nodes.find(n => n.id === nid);
+        if (!nd) {
+          nd = { id: nid, name, group: "coauthor" };
+          state.nodes.push(nd);
+          state.edges.push({ source: d.id, target: nid, count: 1 });
+          updateGraph();
+        }
+        state.selectedNode = nd;
+        state.selectedEdge = null;
+        updateGraph();
+        showNodePanel(nd);
+      });
+    });
+  });
+}
+
+// ── Edge panel (collaboration summary) ──
+async function showEdgePanel(sid, tid, count) {
+  const nm   = nodeMap();
+  const nameA = nm.get(sid)?.name || sid;
+  const nameB = nm.get(tid)?.name || tid;
+  openSidePanel(`${nameA}  ↔  ${nameB}`, `${count} co-authored paper${count > 1 ? "s" : ""}`);
+
+  try {
+    const data = await apiFetch(
+      `/api/collaboration/${sid}/${tid}?na=${encodeURIComponent(nameA)}&nb=${encodeURIComponent(nameB)}`
+    );
+    if (data.error) { setPanelBody(`<div style="color:#e05060;padding:16px">${data.error}</div>`); return; }
+    renderCollabPanel(data);
+  } catch (e) {
+    setPanelBody(`<div style="color:#e05060;padding:16px">Error: ${e.message}</div>`);
+  }
+}
+
+function profileCardHtml(profile, name) {
+  if (!profile) return "";
+  const insts = profile.institutions || [];
+  const instLines = insts.map(i => {
+    const loc = [i.city, i.region, i.country].filter(Boolean).join(", ");
+    return `<div class="profile-row">
+      <span class="profile-icon">🏛</span>
+      <span class="profile-val">${escHtml(i.name)}${loc ? `<br><span style="color:#4a5878;font-size:10px">📍 ${escHtml(loc)}</span>` : ""}</span>
+    </div>`;
+  }).join("") || `<div class="profile-row"><span class="profile-val" style="color:#4a5070">No institution data</span></div>`;
+
+  const stats = [
+    { n: profile.works_count ?? "—",    l: "Works" },
+    { n: profile.cited_by_count ?? "—", l: "Citations" },
+    { n: profile.h_index != null ? profile.h_index : "—", l: "h-index" },
+  ].map(s => `<div class="profile-stat"><div class="n">${s.n}</div><div class="l">${s.l}</div></div>`).join("");
+
+  return `<div class="profile-card">
+    <div class="profile-name">${escHtml(profile.name || name)}</div>
+    ${instLines}
+    <div class="profile-stat-row">${stats}</div>
+  </div>`;
+}
+
+function renderCollabPanel(d) {
+  const yearCounts = d.year_counts || {};
+  const years      = Object.keys(yearCounts).map(Number).sort();
+  const maxVal     = Math.max(1, ...Object.values(yearCounts));
+
+  // All-years bar chart
+  const allBars = years.map(y => `
+    <div class="bar-row">
+      <span class="bar-year">${y}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${(yearCounts[y]/maxVal*100).toFixed(1)}%"></div></div>
+      <span class="bar-num">${yearCounts[y]}</span>
+    </div>`).join("");
+
+  // Recent 3-year trend
+  const trend     = d.recent_trend || {};
+  const trendKeys = Object.keys(trend).sort();
+  const trendMax  = Math.max(1, ...Object.values(trend));
+  const recentBars = trendKeys.map(y => `
+    <div class="bar-row">
+      <span class="bar-year">${y}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${(trend[y]/trendMax*100).toFixed(1)}%;background:#48b090"></div></div>
+      <span class="bar-num">${trend[y]}</span>
+    </div>`).join("");
+
+  // Topics
+  const topicHtml = (d.top_topics || []).map(t =>
+    `<span class="topic-tag">${escHtml(t.topic)} <b style="color:#8090d0">${t.count}</b></span>`
+  ).join("");
+
+  // Recent papers
+  const papersHtml = (d.recent_papers || []).map(p => `
+    <div class="paper-item">
+      <div class="paper-title">${escHtml(p.title || "(no title)")}</div>
+      <div class="paper-year">${p.year || "?"} · ${(p.topics || []).slice(0,2).join(", ")}</div>
+    </div>`).join("");
+
+  setPanelBody(`
+    <div class="section">
+      <div class="stat-number">${d.total}</div>
+      <div class="stat-label">co-authored paper${d.total > 1 ? "s" : ""}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Scholar Profiles</div>
+      ${profileCardHtml(d.profile_a, d.name_a)}
+      ${profileCardHtml(d.profile_b, d.name_b)}
+    </div>
+
+    <div class="section">
+      <div class="section-label">Author Roles</div>
+      <div class="author-name-chip">${escHtml(d.name_a)}</div>
+      <div class="role-row">${roleChips(d.role_a)}</div>
+      <div class="author-name-chip" style="margin-top:6px">${escHtml(d.name_b)}</div>
+      <div class="role-row">${roleChips(d.role_b)}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Top Research Areas</div>
+      <div>${topicHtml || '<span style="color:#4a5070">No topic data</span>'}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Recent 3-Year Collaboration Trend</div>
+      <div id="trend-chart">${recentBars}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Collaboration by Year</div>
+      <div id="trend-chart">${allBars}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Recent Papers (latest ${(d.recent_papers||[]).length})</div>
+      ${papersHtml}
+    </div>
+  `);
+}
+
+function roleChips(roleStr) {
+  if (!roleStr) return '<span class="chip">Unknown</span>';
+  return roleStr.split(",").map(s => s.trim()).map(s =>
+    `<span class="chip ${s.includes("first")||s.includes("corresponding") ? "highlight" : ""}">${escHtml(s)}</span>`
+  ).join("");
+}
+
+function setPanelBody(html) {
+  document.getElementById("panel-body").innerHTML = html;
+}
+
+// ─── Tooltip ──────────────────────────────────────────────────────
+function showTooltip(event, line1, line2) {
+  document.getElementById("tt-name").textContent = line1;
+  document.getElementById("tt-sub").textContent  = line2 || "";
+  document.getElementById("tooltip").style.opacity = 1;
+  moveTooltip(event);
+}
+function hideTooltip() { document.getElementById("tooltip").style.opacity = 0; }
+function onNodeOver(event, d) {
+  showTooltip(event, d.name,
+    [d.institution, d.works_count ? `${d.works_count} works` : ""].filter(Boolean).join(" · "));
+}
+function onNodeOut() { hideTooltip(); }
+svg.on("mousemove", moveTooltip);
+function moveTooltip(event) {
+  const tt   = document.getElementById("tooltip");
+  const wrap = document.getElementById("canvas-wrap");
+  const rect = wrap.getBoundingClientRect();
+  let x = event.clientX - rect.left + 16;
+  let y = event.clientY - rect.top  - 10;
+  if (x + 250 > wrap.clientWidth) x -= 260;
+  tt.style.left = x + "px";
+  tt.style.top  = y + "px";
+}
+
+// ─── Build Network ────────────────────────────────────────────────
+document.getElementById("btn-build").addEventListener("click", buildNetwork);
+document.getElementById("names-input").addEventListener("keydown", e => { if (e.key === "Enter") buildNetwork(); });
+document.getElementById("btn-clear").addEventListener("click", () => {
+  state.nodes = []; state.edges = [];
+  state.expandedIds.clear();
+  state.selectedNode = null; state.selectedEdge = null;
+  closeSidePanel(); updateGraph(); setStatus("Cleared");
+});
+
+async function buildNetwork() {
+  const raw = document.getElementById("names-input").value.trim();
+  if (!raw) return;
+  const names = raw.split(",").map(s => s.trim()).filter(Boolean);
+  if (!names.length) return;
+
+  const btn = document.getElementById("btn-build");
+  btn.disabled = true;
+  try {
+    setStatus(`Resolving ${names.length} scholar${names.length > 1 ? "s" : ""}...`);
+    const resp = await apiFetch("/api/resolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ names }),
+    });
+
+    const resolved = [];
+    for (const item of resp) {
+      if (item.error) { setStatus(`Not found: ${item.query}`); continue; }
+      if (item.candidates.length > 1) {
+        const chosen = await disambiguate(item.query, item.candidates);
+        if (chosen) resolved.push(chosen);
+      } else {
+        resolved.push(item.author);
+      }
+    }
+    if (!resolved.length) return;
+
+    state.nodes = resolved.map(a => ({
+      id: a.id, name: a.name, group: "seed",
+      institution: a.institution, works_count: a.works_count,
+    }));
+    state.edges = [];
+    state.expandedIds.clear();
+    state.selectedNode = null; state.selectedEdge = null;
+    updateGraph();
+
+    setStatus("Finding connections between seed scholars (calling API, please wait)...");
+    const mutual = await apiFetch("/api/mutual_coauthors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ authors: resolved }),
+    });
+    state.edges = mutual.edges || [];
+    updateGraph();
+    setStatus(`Network ready · ${state.nodes.length} nodes · ${state.edges.length} edges · Click a node to expand · Click an edge for collaboration details`);
+  } catch (e) {
+    setStatus(`Error: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ─── Disambiguation ───────────────────────────────────────────────
+function disambiguate(query, candidates) {
+  return new Promise(resolve => {
+    const overlay = document.getElementById("modal-overlay");
+    document.getElementById("modal-title").textContent = `Multiple matches for "${query}"`;
+    document.getElementById("modal-desc").textContent  = "Several scholars share this name. Please select the correct one:";
+    const cands = document.getElementById("modal-cands");
+    cands.innerHTML = "";
+    candidates.forEach(c => {
+      const div = document.createElement("div");
+      div.className = "cand-item";
+      div.innerHTML = `<div class="ci-name">${escHtml(c.name)}</div>
+        <div class="ci-detail">${escHtml(c.institution || "Unknown institution")} · ${c.works_count} works · ${c.id}</div>`;
+      div.addEventListener("click", () => { overlay.classList.remove("show"); resolve(c); });
+      cands.appendChild(div);
+    });
+    const skip = document.createElement("div");
+    skip.className = "cand-item";
+    skip.innerHTML = '<div class="ci-name" style="color:#4a5070">Skip this scholar</div>';
+    skip.addEventListener("click", () => { overlay.classList.remove("show"); resolve(null); });
+    cands.appendChild(skip);
+    overlay.classList.add("show");
+  });
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────
+async function apiFetch(path, opts) {
+  const url = path.startsWith("http") ? path : API_BASE + path;
+  const r = await fetch(url, opts);
+  return r.json();
+}
+function setStatus(msg) { document.getElementById("status").textContent = msg; }
+function escHtml(s) {
+  return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// Initial render
+updateGraph();
+</script>
+</body>
+</html>

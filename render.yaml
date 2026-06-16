@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: academia-collab-network
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: MAILTO
+        value: your-real-email@example.com   # 改成你的邮箱
+      - key: FLASK_ENV
+        value: production
