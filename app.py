@@ -270,6 +270,25 @@ def collaboration_summary(id_a, id_b, name_a, name_b):
 # ------------------------------------------------------------------
 # Flask API
 # ------------------------------------------------------------------
+
+# Global error handlers — always return JSON, never HTML
+@app.errorhandler(400)
+def bad_request(e):
+    return jsonify({"error": f"Bad request: {e}"}), 400
+
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"error": "Not found"}), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    return jsonify({"error": f"Server error: {e}"}), 500
+
+@app.errorhandler(Exception)
+def unhandled(e):
+    return jsonify({"error": str(e)}), 500
+
+
 @app.route("/")
 def index():
     return send_from_directory("static", "index.html")
@@ -277,23 +296,26 @@ def index():
 
 @app.route("/api/resolve", methods=["POST"])
 def api_resolve():
-    names = request.json.get("names", [])
-    results = []
-    for name in names:
-        try:
-            top, candidates = resolve_author(name)
-            results.append({"query": name, "author": top, "candidates": candidates})
-        except ValueError as e:
-            results.append({"query": name, "error": str(e)})
-    return jsonify(results)
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        names = data.get("names", [])
+        results = []
+        for name in names:
+            try:
+                top, candidates = resolve_author(name)
+                results.append({"query": name, "author": top, "candidates": candidates})
+            except Exception as e:
+                results.append({"query": name, "error": str(e)})
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/coauthors/<author_id>")
 def api_coauthors(author_id):
-    limit = int(request.args.get("limit", 30))
     try:
+        limit = int(request.args.get("limit", 30))
         rich = get_coauthors_rich(author_id)
-        # Sort by paper count descending
         sorted_items = sorted(rich.items(), key=lambda x: -x[1]["count"])[:limit]
         nodes = [{"id": aid, "name": info["name"], "count": info["count"]}
                  for aid, info in sorted_items]
@@ -306,9 +328,9 @@ def api_coauthors(author_id):
 
 @app.route("/api/collaboration/<id_a>/<id_b>")
 def api_collaboration(id_a, id_b):
-    name_a = request.args.get("na", id_a)
-    name_b = request.args.get("nb", id_b)
     try:
+        name_a = request.args.get("na", id_a)
+        name_b = request.args.get("nb", id_b)
         summary = collaboration_summary(id_a, id_b, name_a, name_b)
         if not summary:
             return jsonify({"error": "No shared works found"}), 404
@@ -319,35 +341,41 @@ def api_collaboration(id_a, id_b):
 
 @app.route("/api/mutual_coauthors", methods=["POST"])
 def api_mutual_coauthors():
-    author_list = request.json.get("authors", [])
-    authors_map = {a["id"]: a["name"] for a in author_list}
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        author_list = data.get("authors", [])
 
-    nodes = [{"id": a["id"], "name": a["name"], "group": "seed",
-              "institution": a.get("institution", ""),
-              "works_count": a.get("works_count", 0)}
-             for a in author_list]
-    edges = []
-    seen  = set()
+        nodes = [{"id": a["id"], "name": a["name"], "group": "seed",
+                  "institution": a.get("institution", ""),
+                  "works_count": a.get("works_count", 0)}
+                 for a in author_list]
+        edges = []
+        seen  = set()
 
-    for a in author_list:
-        aid  = a["id"]
-        rich = get_coauthors_rich(aid)
-        for b in author_list:
-            bid = b["id"]
-            if aid == bid:
+        for a in author_list:
+            aid = a["id"]
+            try:
+                rich = get_coauthors_rich(aid)
+            except Exception:
                 continue
-            key = tuple(sorted([aid, bid]))
-            if key in seen:
-                continue
-            if bid in rich:
-                seen.add(key)
-                edges.append({
-                    "source": aid,
-                    "target": bid,
-                    "count":  rich[bid]["count"],
-                })
+            for b in author_list:
+                bid = b["id"]
+                if aid == bid:
+                    continue
+                key = tuple(sorted([aid, bid]))
+                if key in seen:
+                    continue
+                if bid in rich:
+                    seen.add(key)
+                    edges.append({
+                        "source": aid,
+                        "target": bid,
+                        "count":  rich[bid]["count"],
+                    })
 
-    return jsonify({"nodes": nodes, "edges": edges})
+        return jsonify({"nodes": nodes, "edges": edges})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
